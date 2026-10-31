@@ -984,7 +984,7 @@ function calcResult(out) {
     boss: T.bossName, footer: T.footer,
   }
   const net = totals(slip).net
-  const rank = out ? D.OUT_RANK : [...D.RANKS].reverse().find(r => net >= r.min)
+  const rank = out ? D.OUT_RANK : S.passed < 20 ? D.RANKS[1] : [...D.RANKS].reverse().find(r => net >= r.min)
   slip.comment = rank.cmt[S.lang]; slip.stamp = rank.st[S.lang]
   return { slip, net, rank, out, hours, crash: S.crash, passed: S.passed }
 }
