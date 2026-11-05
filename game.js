@@ -34,109 +34,38 @@ const S = {
 const TT = () => D.T[S.lang]
 const pick = a => a[Math.floor(S.rand() * a.length) % a.length]
 
-// ---------- 音（素材なし・WebAudio）
-const Snd = {
-  ctx: null, muted: store.get('mute') === '1', next: 0, step: 0, track: null, want: null, switchAt: 0, played: {},
-  TEMPO: { title: 104, play: 118, end: 92 },
-  init() {
-    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return }
-    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return
-    try {
-      this.ctx = new AC()
-      this.master = this.ctx.createGain(); this.master.gain.value = this.muted ? 0 : 0.7; this.master.connect(this.ctx.destination)
-      this.bgm = this.ctx.createGain(); this.bgm.gain.value = 0.0001; this.bgm.connect(this.master)
-      const len = this.ctx.sampleRate; this.noiseBuf = this.ctx.createBuffer(1, len, len)
-      const d = this.noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1
-      if (this.want) { const w = this.want; this.want = null; this.setTrack(w) }
-    } catch (e) { this.ctx = null }
+// ---------- 音（録音素材だけ。合成音は使わない。エンジンは sfx.js、出所は CREDITS.md）
+const sf = (pre, n) => Array.from({ length: n }, (_, i) => `snd/${pre}${i + 1}.mp3`)
+Snd.muted = store.get('mute') === '1'
+Snd.def({
+  tap: 'snd/tap.mp3', whistle: 'snd/whistle.mp3', whistleL: 'snd/whistleL.mp3', flag: sf('flag', 3), honk: sf('honk', 2), bighonk: sf('honk', 2), screech: sf('screech', 2), crash: sf('crash', 2), bell: 'snd/bell.mp3', radio: 'snd/radio.mp3', candy: 'snd/candy.mp3', scrape: 'snd/scrape.mp3', cone: 'snd/cone.mp3', grump: sf('grunt', 3), stamp: 'snd/stamp.mp3', chime: 'snd/chime.mp3', boo: 'snd/boo.mp3',
+})
+const SND_TRACKS = { title: ['snd/bgm_title.mp3', 0.2], play: ['snd/bgm_play.mp3', 0.16], end: ['snd/bgm_title.mp3', 0.2] }
+Object.assign(Snd, {
+  want: null, slow: 0, _init: Snd.init, _setMute: Snd.setMute,
+  init() { const first = !this.ctx; this._init(); if (first && this.ctx) { this.loop('amb', 'snd/amb_site.mp3', 0.16, 1); this.loop('amb2', 'snd/amb_street.mp3', 0.14, 1); this.applyTrack() } },
+  setMute(m) { this._setMute(m); store.set('mute', m ? '1' : '0') },
+  setTrack(name) { if (this.want === name) return; this.want = name; this.applyTrack() },
+  applyTrack() {
+    if (!this.ctx) return
+    const t = this.want && SND_TRACKS[this.want]; this.loop('bgm', t ? t[0] : null, t ? t[1] : 0, 0.3)
+    if (t) this.played['bgm:' + this.want] = (this.played['bgm:' + this.want] || 0) + 1
   },
-  setMute(m) { this.muted = m; store.set('mute', m ? '1' : '0'); if (this.master) this.master.gain.value = m ? 0 : 0.7 },
-  tone(f, t0, dur, type = 'square', vol = 0.2, dest, f2) {
-    if (!this.ctx) return; const c = this.ctx, o = c.createOscillator(), g = c.createGain()
-    o.type = type; o.frequency.setValueAtTime(f, t0); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur)
-    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
-    o.connect(g); g.connect(dest || this.master); o.start(t0); o.stop(t0 + dur + 0.02)
+  // スロー中は曲もゆっくり
+  tick() { const l = this.loops.bgm; if (l && l.node) l.node.playbackRate.value = 1 - this.slow * 0.45 },
+  sfx(n, v = 1) {
+    if (n === 'whistle') { this.play(n, { vol: 0.55, jitter: 0.02 }); return this.play(n, { vol: 0.55, jitter: 0.02, delay: 0.16 }) }
+    if (n === 'whistleL') return this.play(n, { vol: 0.6, jitter: 0.02 })
+    if (n === 'honk') return this.play(n, { vol: 0.32, rate: v > 0.9 ? 1 : 0.92 * v })
+    if (n === 'bighonk') return this.play(n, { vol: 0.5, rate: 0.55 })
+    if (n === 'screech') return this.play(n, { vol: 0.85, rate: 1.7 })
+    if (n === 'crash') { this.duck(0.3, 1.4); return this.play(n, { vol: 1, rate: 0.75, room: 0.4 }) }
+    if (n === 'grump') return this.play(n, { vol: 0.5, rate: 0.85 })
+    if (n === 'bell') return this.play(n, { vol: 0.5, rate: 1.2 })
+    if (n === 'boss') return this.play('grump', { vol: 0.9, rate: 0.62, room: 0.3 })
+    return this.play(n, { vol: { tap: 0.45, flag: 0.5, radio: 0.6, cone: 0.55, candy: 0.7 }[n] ?? 0.9 })
   },
-  noise(t0, dur, vol, freq, type = 'highpass', dest, q, f2) {
-    if (!this.ctx) return; const c = this.ctx, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain()
-    s.buffer = this.noiseBuf; f.type = type; f.frequency.setValueAtTime(freq, t0); if (f2) f.frequency.exponentialRampToValueAtTime(f2, t0 + dur); if (q) f.Q.value = q
-    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
-    s.connect(f); f.connect(g); g.connect(dest || this.master); s.start(t0, Math.random() * 0.5); s.stop(t0 + dur + 0.02)
-  },
-  mtof: m => 440 * Math.pow(2, (m - 69) / 12),
-  mark(n) { this.played[n] = (this.played[n] || 0) + 1 },
-  setTrack(name) {
-    if (this.want === name) return
-    this.want = name; if (!this.ctx) return
-    const now = this.ctx.currentTime, g = this.bgm.gain
-    g.cancelScheduledValues(now); g.setValueAtTime(Math.max(0.0001, g.value), now); g.linearRampToValueAtTime(0.0001, now + 0.25)
-    this.switchAt = now + 0.27
-  },
-  tick() {
-    if (!this.ctx) return; const c = this.ctx
-    if (this.switchAt && c.currentTime >= this.switchAt) {
-      this.track = this.want; this.step = 0; this.next = c.currentTime + 0.05; this.switchAt = 0
-      const g = this.bgm.gain; g.cancelScheduledValues(c.currentTime); g.setValueAtTime(0.0001, c.currentTime); g.linearRampToValueAtTime(0.24, c.currentTime + 0.35)
-      if (this.track) this.mark('bgm:' + this.track)
-    }
-    if (!this.track || this.switchAt) return
-    const spb = 60 / this.TEMPO[this.track] / 4
-    if (this.next < c.currentTime) this.next = c.currentTime + 0.05
-    while (this.next < c.currentTime + 0.25) { this['p_' + this.track](this.step, this.next); this.next += spb; this.step++ }
-  },
-  kick(t, v = 0.7) { this.tone(150, t, 0.16, 'sine', v, this.bgm, 42) },
-  snare(t, v = 0.14) { this.noise(t, 0.12, v, 1800, 'bandpass', this.bgm, 0.9) },
-  hat(t, v = 0.05, open) { this.noise(t, open ? 0.12 : 0.03, v, 8000, 'highpass', this.bgm) },
-  bass(n, t, dur = 0.18, vol = 0.4, type = 'triangle') { this.tone(this.mtof(n), t, dur, type, vol, this.bgm) },
-  // タイトル: のんびりした朝の現場（F - C/E - Dm - Bb）
-  p_title(i, t) {
-    const bar = Math.floor(i / 16) % 4, s = i % 16
-    const root = [41, 40, 38, 34][bar], ch = [[65, 69, 72], [64, 67, 72], [62, 65, 69], [62, 65, 70]][bar]
-    if (s === 0 || s === 10) this.kick(t, 0.45); if (s === 4 || s === 12) this.snare(t, 0.06); if (s % 2 === 0) this.hat(t, 0.025)
-    if (s === 0 || s === 8) for (const n of ch) this.tone(this.mtof(n), t, 0.5, 'triangle', 0.025, this.bgm)
-    if ([0, 6, 8, 14].includes(s)) this.bass(root, t, 0.22, 0.32, 'sine')
-    const mel = [[77, -1, 76, 74, 72, -1, 69, -1], [72, -1, 74, -1, 76, -1, 72, -1], [74, -1, 72, 69, 65, -1, 67, -1], [70, -1, 69, -1, 67, -1, -1, -1]]
-    if (s % 2 === 0) { const n = mel[bar][s / 2]; if (n > 0) this.tone(this.mtof(n), t, 0.22, 'square', 0.022, this.bgm) }
-  },
-  // 勤務中: せわしない現場ファンク（Am - G - F - E）
-  p_play(i, t) {
-    const bar = Math.floor(i / 16) % 4, s = i % 16, hot = S.time > SHIFT.sec * 0.55
-    const root = [45, 43, 41, 40][bar]
-    if (s % 4 === 0) this.kick(t, 0.6); if (s === 4 || s === 12) this.snare(t, 0.13); this.hat(t, s % 4 === 2 ? 0.05 : 0.025, s % 4 === 2)
-    if ([0, 3, 6, 8, 11, 14].includes(s)) this.bass(root + (s === 6 || s === 14 ? 12 : 0), t, 0.13, 0.36, 'sawtooth')
-    if (s === 2 || s === 10) { const ch = [[69, 72, 76], [67, 71, 74], [65, 69, 72], [64, 68, 71]][bar]; for (const n of ch) this.tone(this.mtof(n), t, 0.09, 'square', 0.018, this.bgm) }
-    if (hot && s % 8 === 7) this.tone(this.mtof(81 + (bar % 2) * 2), t, 0.08, 'triangle', 0.03, this.bgm)
-  },
-  // 終業: 夕焼けのチャイム風
-  p_end(i, t) {
-    const bar = Math.floor(i / 16) % 4, s = i % 16
-    const mel = [[72, 72, 74, 76], [76, 79, 79, 76], [74, 72, 74, 76], [72, -1, -1, -1]][bar]
-    if (s % 4 === 0) { const n = mel[s / 4]; if (n > 0) { this.tone(this.mtof(n), t, 0.7, 'sine', 0.07, this.bgm); this.tone(this.mtof(n + 12), t, 0.4, 'sine', 0.015, this.bgm) } }
-    if (s === 0) this.bass([48, 52, 50, 48][bar], t, 1.2, 0.2, 'sine')
-  },
-  sfx(name, v = 1) {
-    if (!this.ctx) return; const t = this.ctx.currentTime; this.mark(name)
-    switch (name) {
-      case 'tap': this.tone(880, t, 0.06, 'triangle', 0.12 * v); break
-      case 'whistle': for (let k = 0; k < 2; k++) { this.tone(2950, t + k * 0.16, 0.11, 'sine', 0.13, null, 3100); this.noise(t + k * 0.16, 0.1, 0.03, 3000, 'bandpass', null, 6) } break
-      case 'whistleL': this.tone(2900, t, 0.5, 'sine', 0.13, null, 2850); this.noise(t, 0.5, 0.03, 3000, 'bandpass', null, 6); break
-      case 'flag': this.noise(t, 0.22, 0.06, 900, 'bandpass', null, 1.5, 2200); break
-      case 'honk': this.tone(415 * v, t, 0.22, 'square', 0.05); this.tone(523 * v, t, 0.22, 'square', 0.04); if (v > 0.9) { this.tone(415, t + 0.3, 0.32, 'square', 0.05); this.tone(523, t + 0.3, 0.32, 'square', 0.04) } break
-      case 'bighonk': this.tone(175, t, 0.9, 'sawtooth', 0.09); this.tone(233, t, 0.9, 'sawtooth', 0.07); break
-      case 'screech': this.noise(t, 0.7, 0.18, 3200, 'bandpass', null, 8, 1800); this.tone(1900, t, 0.6, 'sawtooth', 0.025, null, 1500); break
-      case 'crash': this.tone(110, t, 0.5, 'sine', 0.6, null, 45); for (const f of [622, 659, 932]) this.tone(f, t + 0.05, 0.6, 'square', 0.035); break
-      case 'bell': for (let k = 0; k < 2; k++) for (let j = 0; j < 3; j++) this.tone(3200 + j * 3, t + k * 0.22 + j * 0.03, 0.18, 'sine', 0.06); break
-      case 'radio': this.noise(t, 0.12, 0.07, 1400, 'bandpass', null, 2); this.tone(1200, t + 0.12, 0.06, 'square', 0.03); break
-      case 'candy': this.tone(1047, t, 0.12, 'triangle', 0.1); this.tone(1319, t + 0.1, 0.12, 'triangle', 0.1); this.tone(1568, t + 0.2, 0.25, 'triangle', 0.1); break
-      case 'scrape': for (let k = 0; k < 8; k++) this.noise(t + k * 0.09, 0.08, 0.06, 2600, 'bandpass', null, 3); break
-      case 'cone': this.tone(320, t, 0.12, 'triangle', 0.12, null, 180); this.noise(t, 0.1, 0.06, 900, 'lowpass'); break
-      case 'grump': this.tone(220, t, 0.35, 'triangle', 0.08, null, 160); break
-      case 'stamp': this.tone(160, t, 0.12, 'sine', 0.5, null, 60); this.noise(t, 0.08, 0.12, 900, 'lowpass'); break
-      case 'chime': [72, 76, 79, 84].forEach((n, k) => this.tone(this.mtof(n), t + k * 0.28, 0.6, 'sine', 0.1)); break
-      case 'boo': this.tone(300, t, 0.3, 'square', 0.06, null, 280); this.tone(240, t + 0.32, 0.6, 'square', 0.06, null, 180); break
-    }
-  },
-}
+})
 
 // ---------- 描画の土台
 const canvas = $('#gl')
@@ -321,16 +250,150 @@ function play(c, name, fade = 0.2, speed = 1) {
   a.reset().play(); if (prev) a.crossFadeFrom(prev, fade, false)
   c.cur = name
 }
+// ---------- 顔（Kenney の顔は固定なので、目と口の面を肌色に塗り替えて頭の骨に顔の板を貼る）
+const FACE_INK = '#2f2f37', _ft = {}
+function faceTex(expr) {
+  return _ft[expr] || (_ft[expr] = canvasTex(256, 256, (x) => {
+    x.fillStyle = FACE_INK; x.strokeStyle = FACE_INK; x.lineCap = 'round'; x.lineJoin = 'round'
+    const poly = (...p) => { x.beginPath(); x.moveTo(p[0], p[1]); for (let i = 2; i < p.length; i += 2) x.lineTo(p[i], p[i + 1]); x.closePath(); x.fill() }
+    const both = (f) => { f(); x.save(); x.translate(256, 0); x.scale(-1, 1); f(); x.restore() }
+    const white = (cx, cy, rx, ry) => { x.fillStyle = '#fff'; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, 7); x.fill(); x.fillStyle = FACE_INK }
+    const sweat = (cx, cy, k = 1) => { x.save(); x.fillStyle = '#7cc8f5'; x.beginPath(); x.moveTo(cx, cy - 24 * k); x.quadraticCurveTo(cx + 20 * k, cy + 6 * k, cx, cy + 16 * k); x.quadraticCurveTo(cx - 20 * k, cy + 6 * k, cx, cy - 24 * k); x.fill(); x.restore() }
+    switch (expr) {
+      case 'calm': both(() => { x.beginPath(); x.ellipse(82, 100, 16, 22, 0, 0, 7); x.fill() }); x.lineWidth = 12; x.beginPath(); x.moveTo(100, 172); x.lineTo(156, 172); x.stroke(); break
+      case 'blink': x.lineWidth = 12; both(() => { x.beginPath(); x.moveTo(64, 102); x.lineTo(100, 102); x.stroke() }); x.beginPath(); x.moveTo(100, 172); x.lineTo(156, 172); x.stroke(); break
+      case 'happy': x.lineWidth = 14; both(() => { x.beginPath(); x.moveTo(58, 110); x.quadraticCurveTo(82, 72, 106, 110); x.stroke() }); poly(88, 156, 168, 156, 150, 204, 106, 204); x.fillStyle = '#d9534f'; x.beginPath(); x.ellipse(128, 192, 16, 9, 0, 0, 7); x.fill(); break
+      case 'sweat': both(() => { x.beginPath(); x.ellipse(84, 104, 18, 13, 0, 0, 7); x.fill(); x.lineWidth = 10; x.beginPath(); x.moveTo(56, 62); x.lineTo(108, 76); x.stroke() }); x.lineWidth = 11; x.beginPath(); x.moveTo(96, 182); for (let i = 1; i <= 4; i++) x.lineTo(96 + i * 16, 182 + (i % 2 ? -12 : 0)); x.stroke(); sweat(214, 74); sweat(36, 104, 0.8); break
+      case 'shock': both(() => { white(82, 102, 30, 37); x.beginPath(); x.ellipse(82, 104, 8, 8, 0, 0, 7); x.fill(); x.lineWidth = 10; x.beginPath(); x.moveTo(50, 48); x.quadraticCurveTo(82, 30, 112, 50); x.stroke() }); x.beginPath(); x.ellipse(128, 190, 20, 30, 0, 0, 7); x.fill(); break
+      case 'cry': x.lineWidth = 14; both(() => { x.beginPath(); x.moveTo(58, 96); x.quadraticCurveTo(82, 122, 106, 96); x.stroke() }); x.lineWidth = 12; x.beginPath(); x.moveTo(98, 196); x.quadraticCurveTo(128, 164, 158, 196); x.stroke(); x.fillStyle = '#7cc8f5'; x.fillRect(66, 112, 26, 92); x.fillRect(164, 112, 26, 92); break
+      case 'annoyed': both(() => { poly(58, 92, 106, 92, 106, 118, 58, 118) }); x.lineWidth = 12; x.beginPath(); x.moveTo(102, 178); x.lineTo(154, 172); x.stroke(); break
+      case 'angry': both(() => { poly(60, 100, 108, 114, 100, 132, 62, 126); x.lineWidth = 17; x.beginPath(); x.moveTo(48, 64); x.lineTo(114, 96); x.stroke() }); poly(84, 164, 172, 164, 180, 216, 76, 216); x.fillStyle = '#fff'; x.fillRect(92, 170, 72, 15); break
+      case 'sleep': x.lineWidth = 12; both(() => { x.beginPath(); x.moveTo(58, 104); x.quadraticCurveTo(82, 118, 106, 104); x.stroke() }); x.beginPath(); x.ellipse(128, 184, 14, 12, 0, 0, 7); x.fill(); break
+    }
+  }))
+}
+function blankFace(name) {
+  const model = MODELS[name]; if (model.userData.face !== undefined) return model.userData.face
+  let hm = null; model.scene.traverse(o => { if (o.name === 'head-mesh') hm = o })
+  model.userData.face = null; if (!hm) return null
+  const g = hm.geometry, pos = g.attributes.position, uv = g.attributes.uv, idx = g.index, img = hm.material.map.image
+  const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height; const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0); const d = cx.getImageData(0, 0, img.width, img.height).data
+  // 目と口は全モデル同じ1色 (63,63,70)
+  const dark = (i) => { const px = Math.min(img.width - 1, Math.floor(uv.getX(i) * img.width)), py = Math.min(img.height - 1, Math.floor(uv.getY(i) * img.height)), k = (py * img.width + px) * 4; return Math.abs(d[k] - 63) < 3 && Math.abs(d[k + 1] - 63) < 3 && Math.abs(d[k + 2] - 70) < 3 }
+  const eyes = new Set(); let z0 = 0
+  for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2); if (dark(a) && dark(b) && dark(c) && Math.min(pos.getZ(a), pos.getZ(b), pos.getZ(c)) > 0.08) { eyes.add(a); eyes.add(b); eyes.add(c); z0 = Math.max(z0, pos.getZ(a)) } }
+  if (!eyes.size) return null
+  for (let t = 0; t < idx.count; t += 3) { const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2); if (Math.abs(pos.getZ(a) - z0) < 0.0015 && Math.abs(pos.getZ(b) - z0) < 0.0015 && Math.abs(pos.getZ(c) - z0) < 0.0015) { eyes.add(a); eyes.add(b); eyes.add(c) } }
+  let x0 = 9, x1 = -9, y0 = 9, y1 = -9
+  for (const i of eyes) { x0 = Math.min(x0, pos.getX(i)); x1 = Math.max(x1, pos.getX(i)); y0 = Math.min(y0, pos.getY(i)); y1 = Math.max(y1, pos.getY(i)) }
+  const fy = (y0 + y1) / 2
+  let skin = null, best = -9
+  for (let t = 0; t < idx.count; t += 3) {
+    const a = idx.getX(t), b = idx.getX(t + 1), c = idx.getX(t + 2); if (eyes.has(a)) continue
+    const ys = [pos.getY(a), pos.getY(b), pos.getY(c)], xs = [pos.getX(a), pos.getX(b), pos.getX(c)], z = Math.max(pos.getZ(a), pos.getZ(b), pos.getZ(c))
+    if (Math.min(...ys) > fy || Math.max(...ys) < fy || Math.min(...xs) > 0 || Math.max(...xs) < 0 || z > z0 + 0.001 || z < best) continue
+    best = z; skin = [uv.getX(a), uv.getY(a)]
+  }
+  if (skin) { for (const i of eyes) uv.setXY(i, skin[0], skin[1]); uv.needsUpdate = true }
+  const skel = hm.skeleton, bi = skel ? skel.bones.findIndex(b => b.name === 'head') : -1
+  model.userData.face = { p: new THREE.Vector3(0, fy, z0 + 0.004), w: 0.34, bind: bi >= 0 ? skel.boneInverses[bi].clone() : null }
+  return model.userData.face
+}
+function addFace(c) {
+  const fb = blankFace(c.name); if (!fb || !c.head) return
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(fb.w, fb.w), new THREE.MeshBasicMaterial({ map: faceTex('calm'), transparent: true, depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 }))
+  if (fb.bind) m.position.copy(fb.p).applyMatrix4(fb.bind); else m.position.copy(fb.p)
+  m.renderOrder = 2; c.head.add(m); c.face = m; c.expr = 'calm'
+}
+function setFace(c, expr) { if (!c || !c.face || c.expr === expr) return; c.expr = expr; c.face.material.map = faceTex(expr); if (c === G.c) drawBadge(expr) }
+// 自分の顔は遊び中の画面で小さいので、胸の身分証の写真でも見せる
+function drawBadge(expr) {
+  const cv = $('#gBadge'); if (!cv) return
+  const x = cv.getContext('2d'), W = cv.width, H = cv.height
+  x.clearRect(0, 0, W, H)
+  x.fillStyle = '#f6f2e6'; x.fillRect(0, 0, W, H)
+  x.fillStyle = '#1f3a68'; x.fillRect(0, 0, W, 16)
+  x.fillStyle = '#f0b98f'; x.fillRect(10, 26, W - 20, H - 36)            // 肌
+  x.fillStyle = '#5a7fc2'; x.fillRect(8, 22, W - 16, 24); x.fillStyle = '#2b2f36'; x.fillRect(6, 44, W - 12, 7); x.fillStyle = '#e9c24a'; x.fillRect(W / 2 - 6, 26, 12, 12)   // 制帽
+  x.drawImage(faceTex(expr).image, 8, 40, W - 16, W - 16)
+}
+// 自分の表情: 事故未遂 > 3回目が近い > クラクション・長い列 > 流せている > ふつう
+function guardExpr(dt) {
+  if (S.time - S.lastCrashT < 2.6) return 'shock'
+  if (G.happyT > 0) { G.happyT -= dt; return 'happy' }
+  if (S.mode === 'play' && S.crash >= 2) return 'cry'
+  const longWait = S.cars.some(c => c.wait > WAIT_HONK * 0.7)
+  if (S.mode === 'play' && (longWait || P.sleepT > 0)) return P.sleepT > 0 ? 'annoyed' : 'sweat'
+  G.blinkT = (G.blinkT ?? 2) - dt; if (G.blinkT < 0) { if (G.blinkT < -0.12) G.blinkT = 2 + Math.random() * 3; return 'blink' }
+  return 'calm'
+}
+
+// ---------- 現場監督（事故未遂で走ってきて怒る。3回目は連れて帰る。終業はねぎらいに来る）
+const BOSS = { c: null, st: 'off', t: 0, x: -7.5, z: -16, stayT: 0, line: null, bub: null }
+const BOSS_HOME = [-7.5, -16], BOSS_SPOT = [-4.55, -5.9]
+function bossCome(line, o = {}) {
+  if (!BOSS.c) return
+  BOSS.line = line; BOSS.stayT = o.stay ?? 2.6; BOSS.mood = o.mood ?? 'angry'; BOSS.fast = o.fast ?? true
+  if (BOSS.st === 'off') { BOSS.x = BOSS_HOME[0]; BOSS.z = BOSS_HOME[1] }
+  BOSS.st = 'come'; BOSS.c.g.visible = true
+}
+function updateBoss(dt) {
+  const c = BOSS.c; if (!c) return
+  if (BOSS.st === 'off') return
+  c.mixer.update(dt)
+  const tgt = BOSS.st === 'back' ? BOSS_HOME : BOSS_SPOT, dx = tgt[0] - BOSS.x, dz = tgt[1] - BOSS.z, dist = Math.hypot(dx, dz)
+  if (BOSS.st === 'come' || BOSS.st === 'back') {
+    const sp = BOSS.st === 'come' ? (BOSS.fast ? 9 : 5) : 3.5
+    if (dist > 0.1) { const s = Math.min(dist, sp * dt); BOSS.x += dx / dist * s; BOSS.z += dz / dist * s; c.g.rotation.y = Math.atan2(dx, dz); play(c, BOSS.st === 'come' && BOSS.fast ? 'sprint' : 'walk', 0.15, BOSS.st === 'come' && BOSS.fast ? 1.4 : 1.1) }
+    else if (BOSS.st === 'come') { BOSS.st = 'stay'; BOSS.t = 0; const l = BOSS.line; if (l) { say(BOSS, l, 'boss', Math.max(2.0, 0.9 + l.length * 0.12)); Snd.sfx('boss') } }
+    else { BOSS.st = 'off'; c.g.visible = false }
+  } else if (BOSS.st === 'stay') {
+    BOSS.t += dt
+    c.g.rotation.y = lerpA(c.g.rotation.y, Math.atan2(GUARD[0] - BOSS.x, GUARD[1] - BOSS.z), Math.min(1, dt * 8))
+    play(c, BOSS.mood === 'angry' ? 'emote-no' : 'emote-yes', 0.15, 1.4)
+    if (BOSS.t > BOSS.stayT) { BOSS.st = 'back'; setFace(c, 'calm') }
+  }
+  setFace(c, BOSS.st === 'come' || BOSS.st === 'stay' ? (BOSS.mood === 'angry' ? 'angry' : 'happy') : 'calm')
+  c.g.position.set(BOSS.x, 0, BOSS.z)
+}
+function lerpA(a, b, k) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * k }
+
+// ---------- 事故未遂のスロー（0.15倍から戻す。カメラは現場に寄る）
+const SLOW = { sec: 1.5, peak: 0.55 }
+function startSlow(pos) { S.slowT = SLOW.sec; S.slowPos = pos.clone(); S.slowShot = false }
+function slowK() { if (!(S.slowT > 0)) return 1; const u = 1 - S.slowT / SLOW.sec; return u < 0.7 ? 0.15 : lerp(0.15, 1, (u - 0.7) / 0.3) }
+function updateSlow() {
+  if (!(S.slowT > 0)) { Snd.slow = 0; return }
+  S.slowT -= STEP
+  const u = clamp(1 - S.slowT / SLOW.sec, 0, 1); Snd.slow = u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3
+  if (!S.slowShot && SLOW.sec - S.slowT >= SLOW.peak) { S.slowShot = true; capturePhoto(S.slowPos, 3) }
+}
+// カメラの寄り（u: 0→寄る→0）
+function applyShotCam() {
+  if (!(S.slowT > 0) || !S.slowPos) { if (S.camShot) { S.camShot = false; frameCamera() } return }
+  const u = clamp(1 - S.slowT / SLOW.sec, 0, 1), k = u < 0.2 ? sstep(u / 0.2) : u > 0.75 ? sstep((1 - u) / 0.25) : 1
+  if (!S.camShot) { S.camShot = true; camBase.p.copy(camera.position); camBase.q.copy(camera.quaternion) }
+  _cs.copy(S.slowPos); _cs.y = 1.0
+  _cp.copy(_cs).add(_cd.set(1.8, 7.5, 9.5))
+  camera.position.lerpVectors(camBase.p, _cp, k * 0.72)
+  camera.quaternion.copy(camBase.q); _cm.lookAt(camera.position, _cs, camera.up); _cqq.setFromRotationMatrix(_cm); camera.quaternion.slerp(_cqq, k)
+}
+const camBase = { p: new THREE.Vector3(), q: new THREE.Quaternion() }, _cs = new THREE.Vector3(), _cp = new THREE.Vector3(), _cd = new THREE.Vector3(), _cm = new THREE.Matrix4(), _cqq = new THREE.Quaternion()
 // ヘルメット
 function addHelmet(c, color = 0xffffff, line = 0x2a9d6f) {
   if (!c || !c.head) return
-  const hm = new THREE.Group()
-  const shell = mesh(new THREE.SphereGeometry(0.32, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), std(color, { roughness: 0.35 }), 0, 0, 0, hm); shell.castShadow = true
-  mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.04, 18), std(color, { roughness: 0.35 }), 0, 0.01, 0.04, hm)
-  mesh(new THREE.TorusGeometry(0.3, 0.025, 6, 20), std(line), 0, 0.12, 0, hm).rotation.x = Math.PI / 2
-  // Kenney の頭ボーンは体の 2.2 倍スケール。頭の幅（約0.66）に合わせる
-  const ws = c.head.getWorldScale(new THREE.Vector3()).x || 1, k = c.g.scale.x ? 1 : 1
-  hm.scale.setScalar(0.36 / 0.32 / ws * (c.helmetK ?? 1)); hm.position.set(0, 0.36 / ws * 1.0, 0.0)
+  // 頭の実寸に合わせる（髪が突き抜けず、上から見ても大きく見える）
+  let head = null; c.root.traverse(o => { if (o.name === 'head-mesh') head = o })
+  const bb = new THREE.Box3()
+  head.geometry.computeBoundingBox(); bb.copy(head.geometry.boundingBox)
+  const bi = head.skeleton ? head.skeleton.bones.findIndex(b => b.name === 'head') : -1
+  if (bi >= 0) bb.applyMatrix4(head.skeleton.boneInverses[bi])
+  const sz = bb.getSize(new THREE.Vector3()), cn = bb.getCenter(new THREE.Vector3())
+  const hm = new THREE.Group(), brimY = bb.max.y - sz.y * 0.4
+  hm.position.set(cn.x, brimY, cn.z)
+  const shell = mesh(new THREE.SphereGeometry(1, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), std(color, { roughness: 0.35 }), 0, 0, 0, hm); shell.scale.set(sz.x * 0.62, sz.y * 0.62, sz.z * 0.62); shell.castShadow = true
+  mesh(new THREE.CylinderGeometry(1, 1, sz.y * 0.05, 20), std(color, { roughness: 0.35 }), 0, 0, sz.z * 0.05, hm).scale.set(sz.x * 0.68, 1, sz.z * 0.7)
+  const stripe = mesh(new THREE.SphereGeometry(1.012, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2), std(line), 0, 0, 0, hm); stripe.scale.set(sz.x * 0.16, sz.y * 0.625, sz.z * 0.63)
   c.head.add(hm); return hm
 }
 
@@ -357,9 +420,12 @@ let guardBlob, partnerBlob
 function setupPeople() {
   G.c = makeChar('male-c', 2.25); G.c.g.position.set(GUARD[0], 0, GUARD[1]); G.c.g.rotation.y = 0.35; scene.add(G.c.g); guardBlob = addBlobShadow(G.c.g, 1.1, { opacity: 0.3 })
   P.c = makeChar('male-c', 2.25); P.c.g.position.set(PARTNER[0], 0, PARTNER[1]); P.c.g.rotation.y = Math.PI + 0.4; scene.add(P.c.g); partnerBlob = addBlobShadow(P.c.g, 1.1, { opacity: 0.3 })
+  addFace(G.c); addFace(P.c); drawBadge('calm')
   G.flag.visible = P.flag.visible = true
+  // 現場監督（白いヘルメット）
+  BOSS.c = makeChar('male-d', 2.4, 'idle'); if (BOSS.c) { addFace(BOSS.c); BOSS.c.helmetK = 1.5; addHelmet(BOSS.c, 0xfdfdf8, 0xd62828); BOSS.c.g.visible = false; scene.add(BOSS.c.g); addBlobShadow(BOSS.c.g, 1.15, { opacity: 0.28 }) }
   // 作業員2人
-  for (const [x, z, ry, an] of [[-2.6, -12.6, 0.8, 'interact-right'], [-0.9, -17.2, -2.6, 'pick-up']]) { const w = makeChar('male-e', 1.7, an); w.g.position.set(x, 0, z); w.g.rotation.y = ry; addHelmet(w, 0xffd21a, 0xffffff); scene.add(w.g); WORKERS.push(w) }
+  for (const [x, z, ry, an] of [[-2.6, -12.6, 0.8, 'interact-right'], [-0.9, -17.2, -2.6, 'pick-up']]) { const w = makeChar('male-e', 1.7, an); w.g.position.set(x, 0, z); w.g.rotation.y = ry; w.helmetK = 1.55; addHelmet(w, 0xffd21a, 0xffffff); scene.add(w.g); WORKERS.push(w) }
 }
 const WORKERS = []
 // 旗の持ち方: go = 白を大きく回す（流せ）、stop = 赤を横に突き出す（止まれ）
@@ -624,12 +690,12 @@ function checkConflicts(A, B) {
       Snd.sfx('screech'); Snd.sfx('honk', 1)
       if (fresh) {
         S.crash++; S.lastCrashT = S.time
-        Snd.sfx('crash'); fx.moment(pos, { burst: { count: 30, color: 0xffe08a, speed: 3 }, shake: [0.03, 0.5], zoom: [0.08, 0.5], hitstop: 120 })
+        Snd.sfx('crash'); fx.moment(pos, { burst: { count: 30, color: 0xffe08a, speed: 3 }, shake: [0.03, 0.5], hitstop: 120 })
         ono(TT().crash, pos.clone().add(new THREE.Vector3(0, 1.5, 0)), 'red', { size: 46, life: 1.6 })
-        say(a, pick(TT().crashA), 'hot', 2.2); later(0.5, () => say(b, pick(TT().crashB), 'hot', 2.0))
-        later(1.1, () => { Snd.sfx('radio'); bossSay(S.crash >= 3 ? TT().bossOut : pick(TT().bossCrash)) })
-        later(0.35, () => capturePhoto(pos, 3))
-        if (S.crash >= 3) S.outT = 3.2
+        say(a, pick(TT().crashA), 'hot', 2.2)
+        startSlow(pos)
+        later(0.55, () => { Snd.sfx('radio'); bossCome(S.crash >= 3 ? TT().bossOut : S.rand() < 0.2 ? TT().bossLunch : pick(TT().bossCrash), { stay: S.crash >= 3 ? 5 : 2.6 }) })
+        if (S.crash >= 3) S.outT = 3.6
       } else say(a, pick(TT().crashA), 'hot', 1.6)
       a.anger.visible = b.anger.visible = true; a.mood = b.mood = 2
     }
@@ -755,7 +821,7 @@ function say(who, text, cls = '', life = 1.6) {
 function bossSay(text) { if (G.c) say(G, text, 'boss', 2.2) }
 const _hp = new THREE.Vector3()
 function anchorOf(who, out) {
-  if (who === G || who === P || who === GR) { const c = who.c; if (c && c.head) { c.head.getWorldPosition(out); out.y += 0.85 } else out.set(0, 2, 0); return out }
+  if (who === G || who === P || who === GR || who === BOSS) { const c = who.c; if (c && c.head) { c.head.getWorldPosition(out); out.y += 0.85 } else out.set(0, 2, 0); return out }
   return out.copy(carTop(who)).add(new THREE.Vector3(0, 0.4, 0))
 }
 function updateFx(dt) {
@@ -776,10 +842,10 @@ function updateFx(dt) {
   }
   S.fxList = keep
   // 吹き出しどうしが重ならないようにずらす（古いものから消す）
-  const els = keep.filter(f => f.kind === 'sb' || f.big).map(f => f.el)
-  for (const el of tidyTexts(els, { max: 4, margin: 8, top: 52 })) { const f = S.fxList.find(k => k.el === el); if (f && f.who !== GR) f.t = Math.max(f.t, f.life * 0.85) }
+  const els = keep.map(f => f.el)   // 同時に出す文字は2つまで
+  for (const el of tidyTexts(els, { max: 2, margin: 8, top: 52 })) { const f = S.fxList.find(k => k.el === el); if (f && f.who !== GR) f.t = Math.max(f.t, f.life * 0.85) }
 }
-function clearFx() { for (const f of S.fxList) f.el.remove(); S.fxList = []; for (const c of S.cars) c.bub = null; G.bub = P.bub = null; GR.bub = null }
+function clearFx() { for (const f of S.fxList) f.el.remove(); S.fxList = []; for (const c of S.cars) c.bub = null; G.bub = P.bub = null; GR.bub = null; BOSS.bub = null }
 let laterQ = []
 function later(t, f) { laterQ.push({ t, f }) }
 function updateLater(dt) { const run = []; laterQ = laterQ.filter(l => { l.t -= dt; if (l.t <= 0) { run.push(l.f); return false } return true }); for (const f of run) f() }
@@ -874,14 +940,14 @@ function updateGame(dt) {
   if (S.mode === 'play' || S.mode === 'title') {
     if (S.mode === 'play' && S.endT <= 0 && S.outT <= 0) {
       S.time += dt
-      if (S.time >= SHIFT.sec) { S.endT = 2.4; Snd.sfx('chime'); bossSay(TT().bossEnd); setFlag('stop', false) }
+      if (S.time >= SHIFT.sec) { S.endT = 3.2; Snd.sfx('chime'); bossCome(TT().bossEnd, { mood: 'happy', fast: false, stay: 3 }); G.happyT = 3.2; setFlag('stop', false) }
       // 昼と夕方のひとこと
       if (!S.saidLunch && S.time > HOUR * 4) { S.saidLunch = true; Snd.sfx('radio'); bossSay(TT().lunch) }
       if (!S.saidBusy && S.time > HOUR * 6.2) { S.saidBusy = true; Snd.sfx('radio'); bossSay(TT().busy) }
     }
     if (S.mode === 'title') { S.time = (S.time + dt) % SHIFT.sec; autoFlag(dt) } else if (S.auto) autoFlag(dt)
     S.flagT += dt
-    updateSpawns(dt); updateCars(dt); updatePartner(dt); updateGranny(dt); updateCones(dt); updateLater(dt); updateTutorial()
+    updateSpawns(dt); updateCars(dt); updatePartner(dt); updateGranny(dt); updateCones(dt); updateLater(dt); updateBoss(dt); updateTutorial()
     if (S.endT > 0) { S.endT -= dt; if (S.endT <= 0) toResult(false) }
     if (S.outT > 0) { S.outT -= dt; if (S.outT <= 0) toResult(true) }
   }
@@ -943,6 +1009,8 @@ function resetRun() {
   Object.assign(S, { time: 0, flag: 'stop', flagT: 0, crash: 0, bike: 0, honk: 0, granny: 0, cone: 0, passed: 0, candy: 0, lastCrashT: -99, lastBikeT: -99, outT: 0, endT: 0, photo: null, photoPri: 0, pendA: 0, pendB: 0, accA: 0, accB: 0, nextTA: null, nextTB: null, saidLunch: false, saidBusy: false, result: null })
   P.state = 'go'; P.t = 0; P.handed = false; P.delay = 0; P.sleepT = 0; P.nextSleep = 30; P.fullT = 4; if (P.c) play(P.c, 'idle')
   GR.st = 'off'; GR.next = HOUR * 1.2; if (GR.c) GR.c.g.visible = false
+  S.slowT = 0; S.slowPos = null; S.camShot = false; Snd.slow = 0; frameCamera(); G.happyT = 0
+  BOSS.st = 'off'; BOSS.x = BOSS_HOME[0]; BOSS.z = BOSS_HOME[1]; if (BOSS.c) { BOSS.c.g.visible = false; BOSS.c.bub = null } BOSS.bub = null
   resetCones(); syncFlagBtn()
 }
 function seedTraffic() {
@@ -995,6 +1063,7 @@ function drawSlip(k = 1) {
   drawPayslip($('#slip'), { ...r.slip, photo: S.photo, stampK: k }, slipTheme)
 }
 async function toResult(out) {
+  S.slowT = 0
   if (!S.photo) capturePhoto(new THREE.Vector3(0, 0.5, -12), 0)
   S.mode = 'resultWait'; S.result = calcResult(out); S.resT = 0; S.stamped = false
   for (const id of ['#rBtns1', '#rBtns2', '#bMore']) $(id).classList.remove('on')
@@ -1056,8 +1125,9 @@ function updateScene(dt) {
     G.c.mixer.update(dt)
     if (G.pointT > 0) { G.pointT -= dt; play(G.c, 'interact-left') } else play(G.c, 'idle')
     poseGuard(G, dt, t, S.flag, false)
+    setFace(G.c, guardExpr(dt))
   }
-  if (P.c) { P.c.mixer.update(dt); poseGuard(P, dt, t + 1.3, P.state, P.sleepT > 0) }
+  if (P.c) { P.c.mixer.update(dt); poseGuard(P, dt, t + 1.3, P.state, P.sleepT > 0); setFace(P.c, P.sleepT > 0 ? 'sleep' : 'calm') }
   for (const w of WORKERS) w.mixer.update(dt)
   if (GR.c && GR.c.g.visible) GR.c.mixer.update(dt)
   if (excavator) { excavator.userData.top.rotation.y = Math.sin(t * 0.5) * 0.6; excavator.userData.boom.rotation.x = Math.sin(t * 0.9) * 0.2; excavator.userData.arm.rotation.x = Math.sin(t * 0.9 + 1) * 0.35 }
@@ -1074,12 +1144,13 @@ window.addEventListener('keydown', e => {
 })
 
 // ---------- ループ（固定60Hz）
-function render() { look.update(); fx.applyCamera(); renderer.render(scene, camera) }
+function render() { look.update(); applyShotCam(); fx.applyCamera(); renderer.render(scene, camera) }
 let acc = 0, lastT = performance.now()
 function step() {
-  const vdt = fx.update(STEP)
-  if (vdt > 0) updateGame(STEP)
-  updateScene(STEP); updateFx(STEP); updateReveal(STEP)
+  const vdt = fx.update(STEP), k = slowK()
+  if (vdt > 0) updateGame(STEP * k)
+  updateSlow()
+  updateScene(STEP * k); updateFx(STEP); updateReveal(STEP)
 }
 function loop() {
   requestAnimationFrame(loop)
@@ -1119,7 +1190,7 @@ loadChars().then(() => { $('#loading').hidden = true; setupPeople(); if (S.mode 
 
 // ---------- 検証用の窓口
 window.JT = {
-  S, Snd, D, P, G, GR, camera, toScreen, xPost, calcResult, CAR_TYPES,
+  S, Snd, D, P, G, GR, BOSS, camera, toScreen, xPost, calcResult, CAR_TYPES,
   get charsReady() { return charsReady },
   dbg: {
     pause(b = true) { S.dbgPause = b },
@@ -1136,6 +1207,11 @@ window.JT = {
     over() { S.crash = 3; toResult(true) },
     toResult(out) { toResult(!!out); return new Promise(r => setTimeout(() => { S.resT = 1.29; updateReveal(0.05); r() }, 50)) },
     auto(b = true) { S.auto = b },
+    faces() { return { g: G.c && G.c.expr, p: P.c && P.c.expr, boss: BOSS.c && BOSS.c.expr, hasG: !!(G.c && G.c.face), hasP: !!(P.c && P.c.face), hasB: !!(BOSS.c && BOSS.c.face) } },
+    boss() { return { st: BOSS.st, x: +BOSS.x.toFixed(2), z: +BOSS.z.toFixed(2), vis: !!(BOSS.c && BOSS.c.g.visible) } },
+    bossCome(l, o) { bossCome(l, o) },
+    slow() { return { t: +(S.slowT || 0).toFixed(3), k: +slowK().toFixed(3), pri: S.photoPri, photo: !!S.photo, shot: !!S.slowShot } },
+    helmet() { const w = WORKERS[0]; if (!w) return null; const b = new THREE.Box3(); let hm = null; w.head.traverse(o => { if (o.isMesh && !hm && o.geometry.type === 'SphereGeometry') hm = o }); b.setFromObject(hm); const s = b.getSize(new THREE.Vector3()); return { w: +s.x.toFixed(3), h: +s.y.toFixed(3) } },
     render() { render() },
     look(px, py, pz, tx, ty, tz, fov = 36) { S.dbgPause = true; camera.fov = fov; camera.position.set(px, py, pz); camera.lookAt(tx, ty, tz); camera.updateProjectionMatrix(); render() },
   },

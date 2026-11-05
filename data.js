@@ -27,7 +27,7 @@ window.JT_DATA = {
       bikeNear: 'あぶなっ', squeeze: 'ガリガリ…', cone: 'コーンが！',
       grannyAsk: ['駅はどっちかね？', '郵便局はどこ？', 'スーパーどっち？', 'ここ何の工事？'], grannyTap: 'タップで答える',
       grannyThanks: 'ありがとねぇ。飴ちゃんあげる', grannyMad: '最近の若いもんは…',
-      bossCrash: ['おい新人！！', '何しとんねん！', '始末書やぞ！'], bossOut: 'もう帰ってええわ', bossEnd: 'おつかれさん、上がってええよ',
+      bossCrash: ['おい新人！！', '何しとんねん！', '始末書やぞ！'], bossOut: 'もう帰ってええわ', bossLunch: '弁当食うてたのに！', bossEnd: 'おつかれさん、上がってええよ',
       lunch: 'お昼やけど交代おらんから続けて', busy: '夕方は混むで',
       // 結果（給料明細）
       job: '交通誘導', perCar: '誘導手当', perCarN: '{N}台', candy: '飴ちゃん（現物）', candyN: '{N}個',
@@ -57,7 +57,7 @@ window.JT_DATA = {
       bikeNear: 'Yikes', squeeze: 'Scraaape…', cone: 'The cones!',
       grannyAsk: ['Which way is the station?', 'Where\'s the post office?', 'Supermarket?', 'What are they building?'], grannyTap: 'Tap to answer',
       grannyThanks: 'Thank you, dear. Have a candy', grannyMad: 'Young people these days…',
-      bossCrash: ['HEY, ROOKIE!', 'What are you doing?!', 'Incident report!'], bossOut: 'Just go home', bossEnd: 'Good work. You can go',
+      bossCrash: ['HEY, ROOKIE!', 'What are you doing?!', 'Incident report!'], bossOut: 'Just go home', bossLunch: 'I was eating lunch!', bossEnd: 'Good work. You can go',
       lunch: 'Lunch? Nobody to cover you. Keep going', busy: 'Evening rush is coming',
       job: 'Traffic guard', perCar: 'Per-car bonus', perCarN: '{N} cars', candy: 'Candy (in kind)', candyN: '×{N}',
       dCrash: 'Near head-on', dCrashN: '×{N}', dBike: 'Bike near-miss', dBikeN: '×{N}', dHonk: 'Driver complaints', dHonkN: '×{N}', dGranny: 'Granny complaint', dGrannyN: '×{N}', dCone: 'Broken cones', dConeN: '×{N}',

@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 const ROOT = import.meta.dirname
 mkdirSync(ROOT + '/shots', { recursive: true })
-const PORT = 5474
+const PORT = 5494
 const server = spawn(process.execPath, ['server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) } })
 await new Promise(r => setTimeout(r, 900))
 const URL0 = `http://localhost:${PORT}/`
@@ -51,7 +51,8 @@ const variance = (p, sel) => p.evaluate(sel => {
   let s = 0, s2 = 0, n = 0; for (let i = 0; i < d.length; i += 4 * 13) { const v = d[i] * .3 + d[i + 1] * .59 + d[i + 2] * .11; s += v; s2 += v * v; n++ }
   return Math.round(s2 / n - (s / n) ** 2)
 }, sel)
-const SIZES = [[360, 640, 'small'], [390, 844, 'phone'], [844, 390, 'land'], [667, 375, 'land-se'], [768, 1024, 'tab'], [1440, 900, 'pc']]
+// スマホ縦だけ（横持ち・PC は本人が言った時だけ。2026-11-03）
+const SIZES = [[360, 640, 'small'], [390, 844, 'phone'], [430, 932, 'large']]
 
 const browser = await chromium.launch(MUTE_LAUNCH)
 const p = await open(browser)
@@ -117,7 +118,45 @@ await t('X のポスト: intent/post・手取り・ハッシュタグ・公開UR
 await t('明細の保存（PNG のダウンロード）', async () => { const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#bSave')]); expect(/job-traffic-.*\.png/.test(dl.suggestedFilename()), dl.suggestedFilename()) })
 await t('ほかのバカゲー一覧（4本・居酒屋ホールを含む）', async () => { await p.click('#bMore'); const r = await p.evaluate(() => [...document.querySelectorAll('#moreL a')].map(a => a.href)); await p.click('#bMoreX'); expect(r.length === 4 && r.some(u => /job-izakaya/.test(u)), r) })
 await t('英語に切り替わる（明細も英語）', async () => { await p.click('#bLang'); const r = await p.evaluate(() => [document.documentElement.lang, JT.S.result.slip.job, JT.xPost().text]); await p.click('#bLang'); expect(r[0] === 'en' && r[1] === 'Traffic guard' && /Take-home/.test(r[2]), r) })
+// 事故未遂を台本で起こす（こっちの車が1車線にいる所へ向こうから流す）
+const crashNow = () => p.evaluate(() => {
+  JT.dbg.start(21, { noTut: true, empty: true }); JT.dbg.noSpawn(); JT.dbg.pause(true); JT.P.state = 'go'
+  JT.dbg.spawn(1, 'sedan', -16); JT.dbg.spawn(-1, 'sedan', -9); const cars = JT.S.cars; cars[0].passed = true; cars[1].passed = true; cars[0].v = 8; cars[1].v = 8
+  let i = 0; for (; i < 400 && JT.S.crash === 0; i++) JT.dbg.step(1, true)
+  return { i, crash: JT.S.crash }
+})
+await t('事故未遂: スローになって、カメラが寄り、写真は寄った絵で撮る', async () => {
+  const a = await crashNow(); expect(a.crash === 1, JSON.stringify(a))
+  const r = await p.evaluate(() => {
+    const cam0 = JT.camera.position.clone(), s0 = JT.dbg.slow(), t0 = JT.S.time
+    JT.dbg.step(20); const k20 = JT.dbg.slow(), near = JT.S.slowPos ? JT.camera.position.distanceTo(JT.S.slowPos) : 0, gt20 = JT.S.time - t0
+    JT.dbg.step(30); const s50 = JT.dbg.slow()
+    JT.dbg.step(60); const s110 = JT.dbg.slow(); JT.dbg.render(); const back = JT.camera.position.distanceTo(cam0)
+    return { s0, k20, near, gt20, s50, s110, back, far: cam0.distanceTo(JT.S.slowPos || cam0) }
+  })
+  expect(r.s0.t > 1 && r.k20.k < 0.2 && r.gt20 < 0.1 && r.s50.photo && r.s50.pri === 3 && r.s50.shot && r.s110.k === 1 && r.back < 0.5, JSON.stringify(r)); return { 体感: r.gt20, slow: r.k20.k }
+})
+await t('事故未遂: 監督が3Dで走ってきて怒り、戻っていく', async () => {
+  await crashNow()
+  const seen = await p.evaluate(() => { const out = []; for (let i = 0; i < 700; i++) { JT.dbg.step(1, true); const b = JT.dbg.boss(); if (!out.length || out[out.length - 1] !== b.st) out.push(b.st); if (b.st === 'off' && out.length > 2) break } return { out, face: JT.dbg.faces(), vis: JT.dbg.boss().vis } })
+  expect(seen.out.includes('come') && seen.out.includes('stay') && seen.out.includes('back') && seen.out.at(-1) === 'off' && !seen.vis, JSON.stringify(seen)); return seen.out.join('>')
+})
+await t('顔: 事故未遂で驚き、2回やると泣き、居眠りの相方は寝顔', async () => {
+  await crashNow()
+  const r = await p.evaluate(() => { JT.dbg.step(3, true); const a = JT.dbg.faces().g; JT.S.crash = 2; JT.S.lastCrashT = -99; JT.dbg.step(3, true); const b = JT.dbg.faces().g; JT.S.crash = 0; JT.dbg.sleep(); JT.dbg.step(3, true); const c = JT.dbg.faces(); JT.P.sleepT = 0; return { a, b, c } })
+  expect(r.a === 'shock' && r.b === 'cry' && r.c.p === 'sleep' && r.c.hasG && r.c.hasP && r.c.hasB, JSON.stringify(r)); return r
+})
+await t('身分証: 自分の表情が画面に見えている（一画面内）', async () => {
+  const r = await p.evaluate(() => { const b = document.getElementById('gBadge').getBoundingClientRect(); return { w: b.width, l: b.left, b: b.bottom, H: innerHeight, vis: !document.getElementById('vPlay').hidden } })
+  expect(r.vis && r.w >= 50 && r.l >= 0 && r.b <= r.H, JSON.stringify(r)); return r
+})
+await t('作業員のヘルメットが頭より大きい', async () => { const r = await p.evaluate(() => JT.dbg.helmet()); expect(r && r.w > 0.6, JSON.stringify(r)); return r })
 await t('音: BGM と効果音が呼ばれている（鳴らさず回数で）', async () => { const r = await p.evaluate(() => ({ played: JT.Snd.played, calls: window.__soundCalls || 0 })); expect(r.played['bgm:play'] || r.played['whistle'] || r.calls > 0, JSON.stringify(r)); return Object.keys(r.played).length })
+await t('音: 録音素材が読み込まれ、無音のまま（__muteOk・合成の関数なし）', async () => {
+  await p.waitForFunction(() => Object.values(JT.Snd.bufs).filter(b => b && b !== 'loading').length >= 15, null, { timeout: 15000 })
+  const r = await p.evaluate(() => ({ ok: window.__muteOk(), tone: typeof JT.Snd.tone, amb: !!JT.Snd.loops.amb, amb2: !!JT.Snd.loops.amb2 }))
+  expect(r.ok && r.tone === 'undefined' && r.amb && r.amb2, JSON.stringify(r)); return r
+})
 await t('ミュートが効く', async () => { await p.click('#bMute'); const m = await p.evaluate(() => JT.Snd.muted); await p.click('#bMute'); expect(m === true, m) })
 await t('通しでエラーが出ない', async () => { expect(p.errs.length === 0, p.errs.join('|')) })
 
@@ -143,6 +182,7 @@ await t('WebKit: 2本指の touchmove を止める', async () => {
   const r = await wp.evaluate(() => { const e = new Event('touchmove', { cancelable: true, bubbles: true }); Object.defineProperty(e, 'touches', { value: [{}, {}] }); document.body.dispatchEvent(e); return e.defaultPrevented })
   expect(r, r)
 })
+await t('WebKit: 無音のまま（__muteOk）', async () => { const r = await wp.evaluate(() => ({ ok: window.__muteOk(), ctx: JT.Snd.ctx && JT.Snd.ctx.state })); expect(r.ok && r.ctx !== 'running', JSON.stringify(r)); return r })
 await t('WebKit: エラーなし', async () => { expect(wp.errs.length === 0, wp.errs.join('|')) })
 await wb.close()
 server.kill()

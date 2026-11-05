@@ -1,0 +1,27 @@
+- snd/tap.mp3: Interface Sounds / Kenney / CC0
+- snd/whistle.mp3: referee whistle / SpliceSound / CC0
+- snd/whistleL.mp3: referee whistle / SpliceSound / CC0
+- snd/flag1.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/flag2.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/flag3.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/honk1.mp3: Car Horn / 15HPanska_Ruttner_Jan / CC0
+- snd/honk2.mp3: Car Horn / 15HPanska_Ruttner_Jan / CC0
+- snd/screech1.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/screech2.mp3: 50 RPG sound effects / Kenney / CC0
+- snd/crash1.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/crash2.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/bell.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/radio.mp3: Static B / Oreocooke / CC0
+- snd/candy.mp3: 100 CC0 SFX / rubberduck / CC0
+- snd/scrape.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/cone.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/grunt1.mp3: Little Grunts / crueltyinc / CC0
+- snd/grunt2.mp3: Little Grunts / crueltyinc / CC0
+- snd/grunt3.mp3: Little Grunts / crueltyinc / CC0
+- snd/stamp.mp3: 75 CC0 breaking / falling / hit sfx / rubberduck / CC0
+- snd/chime.mp3: Bell dings/chimes / PWL / CC0
+- snd/boo.mp3: 85 Short music jingles / Kenney / CC0
+- snd/bgm_title.mp3: Comedy Funny Background Song / Almitory / CC-BY 3.0,CC-BY 4.0,CC-BY-SA 3.0,CC-BY-SA 4.0,CC0,GPL 2.0,GPL 3.0,OGA-BY 3.0
+- snd/bgm_play.mp3: Funky Hip Hop Lofi Jam / omfgdude / CC0
+- snd/amb_site.mp3: 100 CC0 SFX #2 / rubberduck / CC0
+- snd/amb_street.mp3: 上の41〜65秒（静かな通り・車が1台通る）を1.5秒の重ね合わせで継ぎ目なしのループにしたもの（22.5秒・16kHz・WAV） / cori / Public domain
