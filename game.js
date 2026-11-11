@@ -1183,7 +1183,6 @@ $('#moreBox').addEventListener('click', e => { if (e.target === e.currentTarget)
 $('#vResult').addEventListener('pointerdown', e => { if (!e.target.closest('button')) finishReveal() })
 $('#bLang').onclick = () => { Snd.init(); S.lang = S.lang === 'ja' ? 'en' : 'ja'; store.set('lang', S.lang); applyLang(); Snd.sfx('tap') }
 $('#bMute').onclick = () => { Snd.init(); Snd.setMute(!Snd.muted); syncMute() }
-document.addEventListener('visibilitychange', () => { if (Snd.ctx) { if (document.hidden) Snd.ctx.suspend(); else Snd.ctx.resume() } })
 S.mode = 'title'; S.time = HOUR * 1.5; show('vTitle'); Snd.setTrack('title')
 requestAnimationFrame(loop)
 loadChars().then(() => { $('#loading').hidden = true; setupPeople(); if (S.mode === 'title') { for (const c of S.cars) freeCar(c); S.cars = []; seedTraffic() } })
