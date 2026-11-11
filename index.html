@@ -39,7 +39,7 @@ button{font-family:inherit;color:inherit;font-size:inherit;-webkit-user-select:n
 #fx{position:fixed;inset:0;z-index:5;pointer-events:none;overflow:hidden}
 #vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(120% 95% at 50% 50%,transparent 60%,rgba(10,14,22,.45) 100%)}
 
-.view{position:fixed;inset:0;z-index:10;height:100svh;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:max(58px,calc(env(safe-area-inset-top) + 52px)) 16px max(18px,calc(env(safe-area-inset-bottom) + 12px))}
+.view{position:fixed;inset:0;z-index:10;height:100svh;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:max(58px,calc(env(safe-area-inset-top) + 52px)) 16px max(18px,calc(calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)) + 12px))}
 .btn{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:900;font-size:18px;letter-spacing:.04em;border:3px solid var(--ink);border-radius:16px;min-height:54px;padding:0 20px;cursor:pointer;width:100%;
   background:var(--paper);color:var(--ink);box-shadow:0 5px 0 var(--ink);transition:transform .06s,box-shadow .06s}
 .btn:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink)}
@@ -94,8 +94,8 @@ html[lang=ja] .logo .main b{font-family:"Zen Maru Gothic",var(--disp);font-weigh
 @keyframes tapf{50%{translate:0 8px}}
 #finger svg{width:100%;height:100%}
 /* 旗ボタン（操作はこれ1つ） */
-#gBadge{position:absolute;left:max(14px,env(safe-area-inset-left));bottom:max(22px,calc(env(safe-area-inset-bottom) + 14px));width:60px;height:80px;border-radius:5px;transform:rotate(-4deg);box-shadow:0 3px 8px rgba(0,0,0,.35);pointer-events:none}
-#bFlag{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(18px,calc(env(safe-area-inset-bottom) + 10px));width:112px;height:112px;border-radius:50%;border:4px solid var(--ink);background:var(--red);color:#fff;box-shadow:0 7px 0 var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;cursor:pointer;pointer-events:auto;touch-action:none;transition:background .12s}
+#gBadge{position:absolute;left:max(14px,env(safe-area-inset-left));bottom:max(22px,calc(calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)) + 14px));width:60px;height:80px;border-radius:5px;transform:rotate(-4deg);box-shadow:0 3px 8px rgba(0,0,0,.35);pointer-events:none}
+#bFlag{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:max(18px,calc(calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)) + 10px));width:112px;height:112px;border-radius:50%;border:4px solid var(--ink);background:var(--red);color:#fff;box-shadow:0 7px 0 var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;cursor:pointer;pointer-events:auto;touch-action:none;transition:background .12s}
 #bFlag:active,#bFlag.press{transform:translateY(5px);box-shadow:0 2px 0 var(--ink)}
 #bFlag svg{width:56px;height:56px}
 #bFlag .fc{fill:#fff;stroke:var(--ink);stroke-width:2.5;stroke-linejoin:round}
@@ -136,7 +136,7 @@ html[lang=en] #bFlag b{font-family:var(--disp);font-weight:400;font-size:17px}
 .reveal.on{opacity:1;transform:none}
 .more{display:flex;align-items:center;justify-content:center;gap:6px;align-self:center;min-height:40px;padding:0 14px;border:0;border-radius:99px;background:rgba(27,22,32,.6);color:var(--paper);font-weight:900;font-size:14px;cursor:pointer;text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
 .more svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-#moreBox{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));background:rgba(10,14,22,.7)}
+#moreBox{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px))) max(12px,env(safe-area-inset-left));background:rgba(10,14,22,.7)}
 .moreP{width:min(560px,100%);max-height:100%;overflow:auto;background:var(--paper);color:var(--ink);border:3px solid var(--ink);border-radius:20px;box-shadow:0 7px 0 var(--ink);padding:8px 12px 12px}
 .moreHd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 .moreHd h2{font-family:"Zen Maru Gothic",var(--disp);font-weight:900;font-size:19px;padding-left:4px}
@@ -157,7 +157,7 @@ html[lang=en] #bFlag b{font-family:var(--disp);font-weight:400;font-size:17px}
   .res .row .btn{min-height:44px;font-size:15px}
 }
 @media (max-height:560px) and (orientation:landscape){
-  .view{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:max(10px,env(safe-area-inset-bottom))}
+  .view{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:max(10px,calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)))}
   #vTitle{flex-direction:row;align-items:flex-end;justify-content:space-between;padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right))}
   #vTitle .logo{width:44%;text-align:left;align-self:flex-start;margin-top:4px}
   .logo .main{font-size:min(6.6vw,13vh,58px)}
@@ -171,8 +171,8 @@ html[lang=en] #bFlag b{font-family:var(--disp);font-weight:400;font-size:17px}
   .resSide{flex:0 0 auto;width:min(320px,44%);min-width:0}
   .res .row .btn{font-size:14px;gap:6px;padding:0 8px;min-height:44px}
   .res .row .btn svg{width:18px;height:18px}
-  #bFlag{width:92px;height:92px;bottom:max(12px,env(safe-area-inset-bottom))}#bFlag svg{width:44px;height:44px}
-  .hint{top:auto;bottom:max(12px,env(safe-area-inset-bottom));font-size:14px}
+  #bFlag{width:92px;height:92px;bottom:max(12px,calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)))}#bFlag svg{width:44px;height:44px}
+  .hint{top:auto;bottom:max(12px,calc(env(safe-area-inset-bottom) + var(--inapp-bot,0px)));font-size:14px}
 }
 @media (min-width:900px) and (min-height:561px){ .res{width:min(900px,100%);flex-direction:row;align-items:center;gap:20px} .resSide{flex:0 0 auto;width:340px} }
 #boot-err{position:fixed;inset:auto 8px 8px 8px;z-index:99;background:#fff;color:#b00;font:12px/1.4 monospace;white-space:pre-wrap;padding:10px;border-radius:8px}
@@ -269,6 +269,6 @@ html[lang=en] #bFlag b{font-family:var(--disp);font-weight:400;font-size:17px}
 <script src="sfx.js?v=2"></script>
 <script src="data.js?v=3"></script>
 <script type="module" src="game.js?v=4"></script>
-<script src="support.js?v=4" data-ja="熱いお茶" data-en="hot tea"></script>
+<script src="support.js?v=5" data-ja="熱いお茶" data-en="hot tea"></script>
 </body>
 </html>
