@@ -8,7 +8,8 @@ const ROOT = import.meta.dirname
 mkdirSync(ROOT + '/shots', { recursive: true })
 const PORT = Number(process.env.VPORT || 5494)
 const server = spawn(process.execPath, ['server.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT) } })
-await new Promise(r => setTimeout(r, 900))
+process.on('exit', () => server.kill())   // 途中で落ちても確認用サーバーを残さない（次の回がポートを握られる）
+for (let i = 0; i < 100; i++) { try { await fetch(`http://localhost:${PORT}/`); break } catch (e) { await new Promise(r => setTimeout(r, 100)) } }
 const URL0 = `http://localhost:${PORT}/`
 let pass = 0, fail = 0
 const results = []
@@ -27,7 +28,7 @@ async function open(browser, opts = {}) {
   p.on('pageerror', e => p.errs.push('pageerror ' + e.message))
   p.on('console', m => { if (m.type() === 'error') p.errs.push('console ' + m.text()) })
   p.on('requestfailed', r => { if (!/fonts\.(googleapis|gstatic)/.test(r.url())) p.errs.push('reqfail ' + r.url()) })
-  await p.goto(URL0); await p.waitForFunction(() => window.__jtReady && window.JT.charsReady, null, { timeout: 15000 })
+  await p.goto(URL0, { timeout: 120000 }); await p.waitForFunction(() => window.__jtReady && window.JT.charsReady, null, { timeout: 90000 })
   return p
 }
 // 横のはみ出し
@@ -106,12 +107,15 @@ await t('待たせすぎると苦情が数えられる', async () => {
   const r = await p.evaluate(() => { JT.dbg.start(11, { noTut: true }); JT.dbg.pause(true); JT.dbg.noSpawn(true); JT.dbg.clear(); JT.dbg.spawn(-1, 'sedan'); JT.dbg.step(60 * 26, true); return JT.state().honk })
   expect(r === 1, r) })
 await t('おばあちゃん: 吹き出しをタップで答える → 飴ちゃん', async () => {
-  await p.evaluate(() => { JT.dbg.start(12, { noTut: true }); JT.dbg.granny() }); await p.waitForFunction(() => JT.state().grannySt === 'ask', null, { timeout: 15000 })
-  await p.click('.sb.granny', { force: true }); const s = await st(); expect(s.candy === 1 && s.grannySt === 'thanks', JSON.stringify([s.candy, s.grannySt])) })
+  // 実時間で出てくるのを待つと負荷で15秒を超える。時間を止めてコマで進め、吹き出しの位置を描いてから押す
+  const n = await p.evaluate(() => { JT.dbg.start(12, { noTut: true }); JT.dbg.pause(true); JT.dbg.granny(); let i = 0; for (; i < 60 * 30 && JT.state().grannySt !== 'ask'; i++) JT.dbg.step(1, true); JT.dbg.render(); return i })
+  expect(await p.evaluate(() => JT.state().grannySt === 'ask'), 'granny never asked after ' + n + ' steps')
+  await p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
+  await p.click('.sb.granny', { force: true }); const s = await st(); await p.evaluate(() => JT.dbg.pause(false)); expect(s.candy === 1 && s.grannySt === 'thanks', JSON.stringify([s.candy, s.grannySt])) })
 await t('おばあちゃん: 放っておくと苦情', async () => {
   const r = await p.evaluate(() => { JT.dbg.start(13, { noTut: true }); JT.dbg.pause(true); JT.dbg.granny(); JT.dbg.step(60 * 24, true); return JT.state().granny }); expect(r === 1, r) })
 await t('1日（8:00〜16:00）通すと給料明細（時給→勤務時間→総支給→控除→手取り→ひとこと→ハンコ）', async () => {
-  const r = await p.evaluate(async () => { JT.dbg.start(14, { noTut: true }); JT.dbg.auto(true); JT.dbg.pause(true); for (let i = 0; i < 150 && JT.S.mode === 'play'; i++) JT.dbg.step(60, true); JT.dbg.pause(false); await new Promise(r => setTimeout(r, 1800)); const R = JT.S.result; return { mode: JT.S.mode, hours: R.hours, wage: R.slip.wage, net: R.net, stamp: R.slip.stamp, cmt: R.slip.comment, ded: R.slip.ded.map(d => d.label), x: JT.xPost(), btn: document.querySelector('#rBtns2').classList.contains('on') } })
+  const r = await p.evaluate(async () => { JT.dbg.start(14, { noTut: true }); JT.dbg.auto(true); JT.dbg.pause(true); for (let i = 0; i < 150 && JT.S.mode === 'play'; i++) JT.dbg.step(60, true); for (let i = 0; i < 500 && JT.S.mode === 'resultWait'; i++) await new Promise(r => setTimeout(r, 20)); for (let i = 0; i < 60 * 10 && !(JT.S.resT > 1.3); i++) JT.dbg.step(1, true); JT.dbg.render(); JT.dbg.pause(false); const R = JT.S.result; return { mode: JT.S.mode, hours: R.hours, wage: R.slip.wage, net: R.net, stamp: R.slip.stamp, cmt: R.slip.comment, ded: R.slip.ded.map(d => d.label), x: JT.xPost(), btn: document.querySelector('#rBtns2').classList.contains('on') } })
   expect(r.mode === 'result' && r.hours === 8 && r.wage === 1300 && r.ded.length === 5 && r.stamp && r.cmt && r.btn, JSON.stringify(r)); return { net: r.net, stamp: r.stamp } })
 await t('明細の絵が描けている（輝度の散らばり）', async () => { const v = await variance(p, '#slip'); expect(v > 500, v); return v })
 await p.screenshot({ path: `${ROOT}/shots/result-phone.png` })
